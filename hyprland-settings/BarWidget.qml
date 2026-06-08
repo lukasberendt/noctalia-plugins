@@ -1,13 +1,13 @@
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import qs.Commons
-import qs.Widgets
 import qs.Services.UI
+import qs.Widgets
 
-Rectangle {
+NIconButton {
   id: root
 
+  // Injected properties
   property var pluginApi: null
   property ShellScreen screen
   property string widgetId: ""
@@ -15,42 +15,55 @@ Rectangle {
   property int sectionWidgetIndex: -1
   property int sectionWidgetsCount: 0
 
-  property int count: pluginApi?.pluginSettings?.count || 0
+  icon: "settings"
+  tooltipText: "Hyprland Settings"
+  tooltipDirection: BarService.getTooltipDirection(screen?.name)
+  baseSize: Style.getCapsuleHeightForScreen(screen?.name)
+  applyUiScale: false
 
-  implicitWidth: row.implicitWidth + Style.marginM * 2
-  implicitHeight: Style.barHeight
-  color: Style.capsuleColor
-  radius: Style.radiusM
+  // Make it a perfect circle
+  customRadius: baseSize / 2
 
-  RowLayout {
-    id: row
-    anchors.centerIn: parent
-    spacing: Style.marginS
+  colorBg: Style.capsuleColor
+  colorFg: Color.mPrimary
+  colorBgHover: Color.mHover
+  colorFgHover: Color.mOnHover
+  colorBorder: "transparent"
+  colorBorderHover: "transparent"
 
-    NIcon {
-      icon: "numbers"
-      color: Color.mPrimary
-    }
-
-    NText {
-      text: root.count.toString()
-      color: Color.mOnSurface
-      pointSize: Style.fontSizeM
-      font.weight: Font.Bold
+  onClicked: {
+    if (pluginApi && pluginApi.mainInstance) {
+      pluginApi.mainInstance.openSettingsWindow(root.screen);
+    } else {
+      Logger.w("hyprland-settings", "Cannot open settings: pluginApi or mainInstance is null");
     }
   }
 
-  MouseArea {
-    anchors.fill: parent
-    onClicked: {
-      root.count++
-      pluginApi.pluginSettings.count = root.count
-      pluginApi.saveSettings()
-      ToastService.showNotice("Count: " + root.count)
+  NPopupContextMenu {
+    id: contextMenu
+
+    model: [
+      {
+        "label": "Plugin Settings",
+        "action": "settings",
+        "icon": "settings"
+      }
+    ]
+
+    onTriggered: function (action) {
+      contextMenu.close();
+      PanelService.closeContextMenu(screen);
+      if (action === "settings") {
+        BarService.openPluginSettings(root.screen, pluginApi.manifest);
+      }
     }
+  }
+
+  onRightClicked: {
+    PanelService.showContextMenu(contextMenu, root, screen);
   }
 
   Component.onCompleted: {
-    Logger.i("Counter", "Widget loaded with count:", root.count)
+    Logger.i("hyprland-settings", "Settings launcher widget loaded");
   }
 }

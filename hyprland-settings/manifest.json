@@ -8,6 +8,7 @@
   "repository": "https://github.com/lukasberendt/noctalia-plugins",
   "description": "A Hyprland Settings GUI",
   "entryPoints": {
+    "main": "Main.qml",
     "barWidget": "BarWidget.qml"
   },
   "dependencies": {
@@ -15,7 +16,6 @@
   },
   "metadata": {
     "defaultSettings": {
-      "count": 0
     }
   }
 }

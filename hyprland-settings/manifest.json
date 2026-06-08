@@ -1,0 +1,19 @@
+{
+  "id": "hyprland-settings",
+  "name": "Hyprland Settings",
+  "version": "1.0.0",
+  "minNoctaliaVersion": "3.6.0",
+  "author": "Lukas Berendt",
+  "license": "MIT",
+  "repository": "https://github.com/lukasberendt/noctalia-plugins",
+  "description": "A Hyprland Settings GUI",
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "dependencies": {
+    "plugins": []
+  },
+  "metadata": {
+    "defaultSettings": {}
+  }
+}

@@ -25,9 +25,27 @@ PanelWindow {
   WlrLayershell.namespace: "hyprland-settings-overlay"
   WlrLayershell.exclusionMode: ExclusionMode.Ignore
 
-  // Dynamic configuration files list
-  property var configFiles: []
-  property string activeTabName: ""
+  // Static configuration tabs list
+  property var configTabs: [
+    { name: "Monitors", file: "monitors.conf", icon: "device-desktop" },
+    { name: "Startup", file: "startup.conf", icon: "rocket" },
+    { name: "Environment", file: "env.conf", icon: "braces" },
+    { name: "Input", file: "input.conf", icon: "keyboard" },
+    { name: "Keybinds", file: "keybinds.conf", icon: "keyboard-hide" },
+    { name: "Design", file: "design.conf", icon: "palette" },
+    { name: "Window Rules", file: "windowrules.conf", icon: "app-window" }
+  ]
+  property string activeTabName: "monitors.conf"
+
+  // Helper read-only property to get the active tab object
+  readonly property var activeTab: {
+    for (var i = 0; i < configTabs.length; i++) {
+      if (configTabs[i].file === activeTabName) {
+        return configTabs[i];
+      }
+    }
+    return null;
+  }
 
   // Editor states
   property string editorText: ""
@@ -38,25 +56,29 @@ PanelWindow {
   onVisibleChanged: {
     if (visible) {
       dialogContent.forceActiveFocus();
-      listFilesProc.running = true;
+      initConfigProc.running = true;
     }
   }
 
-  // Process to dynamically retrieve files in .config/hypr/conf/
+  Component.onCompleted: {
+    initConfigProc.running = true;
+  }
+
+  // Process to check if config directory exists, create it, and instantiate config files
   Process {
-    id: listFilesProc
-    command: ["ls", "-1", root.configDir]
-    running: true
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var raw = this.text.trim();
-        var files = raw ? raw.split("\n") : [];
-        // Only include files ending in .conf
-        files = files.filter(f => f.endsWith(".conf"));
-        root.configFiles = files;
-        if (files.length > 0 && root.activeTabName === "") {
-          root.activeTabName = files[0];
-        }
+    id: initConfigProc
+    command: [
+      "sh", "-c",
+      "mkdir -p '" + root.configDir + "' && " +
+      "for f in monitors.conf startup.conf env.conf input.conf keybinds.conf design.conf windowrules.conf; do " +
+      "  [ -f '" + root.configDir + "/'$f ] || touch '" + root.configDir + "/'$f; " +
+      "done"
+    ]
+    running: false
+
+    onExited: (exitCode, exitStatus) => {
+      if (activeFileView.path !== "") {
+        activeFileView.reload();
       }
     }
   }
@@ -167,7 +189,7 @@ PanelWindow {
               Layout.fillHeight: true
 
               Repeater {
-                model: root.configFiles
+                model: root.configTabs
 
                 delegate: Rectangle {
                   id: navItem
@@ -175,7 +197,7 @@ PanelWindow {
                   Layout.preferredHeight: 44 * Style.uiScaleRatio
                   radius: Style.radiusM
 
-                  readonly property bool active: root.activeTabName === modelData
+                  readonly property bool active: root.activeTabName === modelData.file
                   readonly property bool hovered: mouseNavArea.containsMouse
 
                   color: active ? Qt.alpha(Color.mPrimary, 0.12) : (hovered ? Qt.alpha(Color.mOnSurface, 0.05) : "transparent")
@@ -203,26 +225,19 @@ PanelWindow {
                     spacing: Style.marginM
 
                     NIcon {
-                      icon: {
-                        if (modelData === "monitors.conf") return "device-desktop"
-                        if (modelData === "startup.conf") return "rocket"
-                        if (modelData === "env.conf") return "braces"
-                        if (modelData === "input.conf") return "keyboard"
-                        if (modelData === "keybinds.conf") return "keyboard-hide"
-                        if (modelData === "design.conf") return "palette"
-                        if (modelData === "windowrules.conf") return "app-window"
-                        return "file-text"
-                      }
+                      icon: modelData.icon
                       color: navItem.active ? Color.mPrimary : Color.mOnSurfaceVariant
                       pointSize: Style.fontSizeM
                     }
 
                     NText {
-                      text: modelData.replace(".conf", "")
+                      text: modelData.name
                       color: navItem.active ? Color.mPrimary : Color.mOnSurface
                       font.weight: navItem.active ? Font.DemiBold : Font.Normal
                       pointSize: Style.fontSizeM
                     }
+
+                    Item { Layout.fillWidth: true }
                   }
 
                   MouseArea {
@@ -230,7 +245,7 @@ PanelWindow {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.activeTabName = modelData
+                    onClicked: root.activeTabName = modelData.file
                   }
                 }
               }
@@ -288,7 +303,7 @@ PanelWindow {
                 spacing: 0
 
                 NText {
-                  text: root.activeTabName ? root.activeTabName : "Configuration File"
+                  text: root.activeTab ? root.activeTab.name : "Configuration File"
                   font.weight: Font.Bold
                   pointSize: Style.fontSizeXL
                   color: Color.mOnSurface
@@ -298,7 +313,7 @@ PanelWindow {
                   text: "~/.config/hypr/conf/" + (root.activeTabName ? root.activeTabName : "")
                   pointSize: Style.fontSizeXS
                   color: Color.mOnSurfaceVariant
-                  font.family: Settings.data?.ui?.fontFixed || "monospace"
+                  font.family: (Settings.data && Settings.data.ui && Settings.data.ui.fontFixed) || "monospace"
                 }
               }
             }
@@ -308,32 +323,65 @@ PanelWindow {
               Layout.bottomMargin: Style.marginM
             }
 
-            // Code Editor Box
-            Rectangle {
+            // Editor Area
+            Item {
               Layout.fillWidth: true
               Layout.fillHeight: true
-              color: Color.mSurfaceVariant
-              radius: Style.radiusM
-              border.color: Color.mOutline
-              border.width: Style.borderS
 
-              ScrollView {
+              Loader {
+                id: editorLoader
                 anchors.fill: parent
-                anchors.margins: Style.marginM
-                clip: true
+                source: {
+                  if (root.activeTabName === "env.conf") return "EnvEditor.qml";
+                  if (root.activeTabName === "startup.conf") return "StartupEditor.qml";
+                  if (root.activeTabName === "monitors.conf") return "MonitorsEditor.qml";
+                  return "";
+                }
+              }
 
-                TextArea {
-                  id: editorArea
-                  text: root.editorText
-                  placeholderText: "File is empty"
-                  placeholderTextColor: Color.mOnSurfaceVariant
-                  wrapMode: TextEdit.NoWrap
-                  readOnly: true
-                  color: Color.mOnSurface
-                  font.family: Settings.data?.ui?.fontFixed || "monospace"
-                  font.pointSize: Style.fontSizeM
-                  background: null
-                  selectByMouse: true
+              Binding {
+                target: editorLoader.item
+                property: "textContent"
+                value: root.editorText
+                when: editorLoader.status === Loader.Ready
+              }
+
+              Connections {
+                target: editorLoader.item
+                ignoreUnknownSignals: true
+                function onSaved(newText) {
+                  root.editorText = newText;
+                  activeFileView.setText(newText);
+                }
+              }
+
+              // Fallback raw text viewer
+              Rectangle {
+                anchors.fill: parent
+                visible: editorLoader.source === ""
+                color: Color.mSurfaceVariant
+                radius: Style.radiusM
+                border.color: Color.mOutline
+                border.width: Style.borderS
+
+                ScrollView {
+                  anchors.fill: parent
+                  anchors.margins: Style.marginM
+                  clip: true
+
+                  TextArea {
+                    id: editorArea
+                    text: root.editorText
+                    placeholderText: "File is empty"
+                    placeholderTextColor: Color.mOnSurfaceVariant
+                    wrapMode: TextEdit.NoWrap
+                    readOnly: true
+                    color: Color.mOnSurface
+                    font.family: (Settings.data && Settings.data.ui && Settings.data.ui.fontFixed) || "monospace"
+                    font.pointSize: Style.fontSizeM
+                    background: null
+                    selectByMouse: true
+                  }
                 }
               }
             }

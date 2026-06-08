@@ -69,10 +69,12 @@ Item {
     for (var i = 0; i < itemsList.length; i++) {
       var item = itemsList[i];
       if (item.type === "env") {
-        var prefix = item.enabled ? "" : "# ";
-        var keyword = item.keyword || "env";
-        var lineContent = prefix + keyword + " = " + item.key + ", " + item.value + (item.inlineComment || "");
-        lines.push(lineContent);
+        if (item.key && item.key.trim() !== "") {
+          var prefix = item.enabled ? "" : "# ";
+          var keyword = item.keyword || "env";
+          var lineContent = prefix + keyword + " = " + item.key + ", " + item.value + (item.inlineComment || "");
+          lines.push(lineContent);
+        }
       } else {
         lines.push(item.text);
       }
@@ -206,8 +208,9 @@ Item {
               checked: modelData.enabled
               Layout.preferredWidth: 44 * Style.uiScaleRatio
               onToggled: function (isChecked) {
-                if (modelData.enabled !== isChecked) {
-                  modelData.enabled = isChecked;
+                var item = root.envItems[index];
+                if (item && item.enabled !== isChecked) {
+                  item.enabled = isChecked;
                   root.save();
                 }
               }
@@ -217,8 +220,11 @@ Item {
               text: modelData.keyword || "env"
               Layout.preferredWidth: 70 * Style.uiScaleRatio
               onClicked: {
-                modelData.keyword = (modelData.keyword === "envd") ? "env" : "envd";
-                root.save();
+                var item = root.envItems[index];
+                if (item) {
+                  item.keyword = (item.keyword === "envd") ? "env" : "envd";
+                  root.save();
+                }
               }
             }
 
@@ -227,8 +233,9 @@ Item {
               placeholderText: "e.g. QT_QPA_PLATFORM"
               Layout.preferredWidth: (envScrollView.width - Style.marginL - 114 * Style.uiScaleRatio) * 0.4
               onEditingFinished: {
-                if (modelData.key !== text) {
-                  modelData.key = text;
+                var item = root.envItems[index];
+                if (item && item.key !== text) {
+                  item.key = text;
                   root.save();
                 }
               }
@@ -239,8 +246,9 @@ Item {
               placeholderText: "e.g. wayland"
               Layout.fillWidth: true
               onEditingFinished: {
-                if (modelData.value !== text) {
-                  modelData.value = text;
+                var item = root.envItems[index];
+                if (item && item.value !== text) {
+                  item.value = text;
                   root.save();
                 }
               }
